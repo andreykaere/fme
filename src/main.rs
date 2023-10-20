@@ -3,12 +3,15 @@ use clap::Parser;
 
 use std::ffi::OsStr;
 use std::fs;
-use std::io::{self, Lines, StdinLock};
+use std::io;
 use std::path::Path;
+
+use atty::Stream;
 
 // TODO: create the ability to choose different modes
 // TODO: think about how it's better to deal with non-ascii case
-// TODO: allow stdin only from piping
+// TODO: doesn't work on Antonok mp3 files. Find out why, and how to get
+// around this
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -16,8 +19,12 @@ struct Args {
     #[clap(flatten)]
     metadata: Metadata,
 
+    #[arg(long)]
     title_exec: Option<String>,
+
+    #[arg(long)]
     artist_exec: Option<String>,
+
     files: Option<Vec<String>>,
 }
 
@@ -154,12 +161,11 @@ fn get_metadata(file: impl AsRef<Path>) -> Metadata {
 
 fn get_files_list(
     files_from_args: Vec<String>,
-    files_from_stdin: Lines<StdinLock<'_>>,
+    files_from_stdin: Vec<String>,
 ) -> Vec<File> {
     let files_iter = files_from_args
         .into_iter()
-        .chain(files_from_stdin.into_iter().map(|x| x.unwrap()));
-    // .filter(|x| !x.is_empty());
+        .chain(files_from_stdin.into_iter());
 
     let mut files = Vec::new();
 
@@ -172,8 +178,14 @@ fn get_files_list(
 
 fn main() {
     let args = Args::parse();
-    let files_from_stdin = io::stdin().lines();
     let files_from_args = args.files.unwrap_or(Vec::new());
+
+    let files_from_stdin = if atty::is(Stream::Stdin) {
+        Vec::new()
+    } else {
+        io::stdin().lines().map(|x| x.unwrap()).collect()
+    };
+
     let files = get_files_list(files_from_args, files_from_stdin);
 
     files
