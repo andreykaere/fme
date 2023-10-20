@@ -9,3 +9,6 @@ edition = "2021"
 atty = "0.2.14"
 audiotags = "0.4.1"
 clap = { version = "4.4.6", features = ["derive"] }
+id3 = "1.8.0"
+metaflac = "0.2.5"
+mp4ameta = "0.11.0"

@@ -1,5 +1,6 @@
 use audiotags::{MimeType, Picture, Tag};
 use clap::Parser;
+use id3::Version;
 
 use std::ffi::OsStr;
 use std::fs;
@@ -10,7 +11,6 @@ use atty::Stream;
 
 // TODO: create the ability to choose different modes
 // TODO: think about how it's better to deal with non-ascii case
-// TODO: doesn't work on Antonok mp3 files. Find out why, and how to get
 // around this
 
 #[derive(Parser, Debug)]
@@ -61,8 +61,53 @@ impl File {
     }
 }
 
+fn init_metadata(file: &File) {
+    match file
+        .path
+        .extension()
+        .unwrap()
+        .to_string_lossy()
+        .to_string()
+        .to_lowercase()
+        .as_str()
+    {
+        "mp3" => {
+            let new_tag = id3::Tag::new();
+            new_tag
+                .write_to_path(
+                    file.path.to_string_lossy().to_string(),
+                    Version::Id3v24,
+                )
+                .unwrap();
+        }
+
+        "m4a" | "m4b" | "m4p" | "m4v" | "isom" | "mp4" => {
+            let new_tag = mp4ameta::Tag::default();
+            new_tag
+                .write_to_path(file.path.to_string_lossy().to_string())
+                .unwrap();
+        }
+
+        "flac" => {
+            let mut new_tag = metaflac::Tag::new();
+            new_tag
+                .write_to_path(file.path.to_string_lossy().to_string())
+                .unwrap();
+        }
+
+        _ => unimplemented!("Other file formats are not supported"),
+    }
+}
+
 fn write_metadata(file: &File, metadata: &Metadata) {
-    let mut tag = Tag::new().read_from_path(&file.path).unwrap();
+    let tag = Tag::new();
+    let mut tag = match tag.read_from_path(&file.path) {
+        Ok(t) => t,
+        Err(_) => {
+            init_metadata(file);
+            tag.read_from_path(&file.path).unwrap()
+        }
+    };
 
     if let Some(artist) = &metadata.artist {
         tag.set_artist(artist);
@@ -94,13 +139,7 @@ fn write_metadata(file: &File, metadata: &Metadata) {
         tag.set_year(*year as i32);
     }
 
-    tag.write_to_path(file.path.to_str().unwrap()).unwrap();
-
-    //     let mut opened_file =
-    //         fs::File::create(&*file.path).expect("Failed to open the file");
-
-    //     tag.write_to(&mut opened_file)
-    //         .expect("Filed to change file's metadata");
+    tag.write_to_path(&file.path.to_string_lossy()).unwrap();
 }
 
 fn process_file(file: &File, metadata: &Metadata) {
@@ -120,11 +159,11 @@ fn get_filename(file: impl AsRef<Path>) -> String {
 }
 
 fn artist_and_title(filename: &str) -> (String, String) {
-    let (mut artist, mut title) = filename
+    let (artist, title) = filename
         .split_once('-')
         .expect("Can't extract artist and title from the filename");
 
-    title = Path::new(title).file_stem().unwrap().to_str().unwrap();
+    let title = Path::new(title).file_stem().unwrap().to_string_lossy();
 
     let trim_num = |s: &str| -> String {
         let s_comps = s.split_once(' ');
@@ -137,13 +176,10 @@ fn artist_and_title(filename: &str) -> (String, String) {
         s.to_string()
     };
 
-    title = title.trim();
-    artist = artist.trim();
-
     // Trim leading number, because we don't want the number of the file to be
     // in the metadata
-    let title = trim_num(title);
-    let artist = trim_num(artist);
+    let title = trim_num(title.trim());
+    let artist = trim_num(artist.trim());
 
     (title, artist)
 }
@@ -163,9 +199,7 @@ fn get_files_list(
     files_from_args: Vec<String>,
     files_from_stdin: Vec<String>,
 ) -> Vec<File> {
-    let files_iter = files_from_args
-        .into_iter()
-        .chain(files_from_stdin.into_iter());
+    let files_iter = files_from_args.into_iter().chain(files_from_stdin);
 
     let mut files = Vec::new();
 

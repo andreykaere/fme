@@ -177,6 +177,9 @@ dependencies = [
  "atty",
  "audiotags",
  "clap",
+ "id3",
+ "metaflac",
+ "mp4ameta",
 ]
 
 [[package]]
