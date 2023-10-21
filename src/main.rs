@@ -25,7 +25,7 @@ struct Args {
     #[arg(long)]
     artist_exec: Option<String>,
 
-    files: Option<Vec<String>>,
+    files: Option<Vec<Box<Path>>>,
 }
 
 #[derive(clap::Args, Clone, Default, Debug)]
@@ -36,10 +36,10 @@ struct Metadata {
     #[arg(long, short)]
     artist: Option<String>,
 
-    #[arg(long)]
+    #[arg(short = 'T', long)]
     album_title: Option<String>,
 
-    #[arg(long)]
+    #[arg(short = 'C', long)]
     album_cover: Option<Box<Path>>,
 
     #[arg(long, short)]
@@ -153,15 +153,16 @@ fn get_filename(file: impl AsRef<Path>) -> String {
     file.as_ref()
         .file_name()
         .unwrap()
-        .to_str()
-        .unwrap()
+        .to_string_lossy()
         .to_string()
 }
 
 fn artist_and_title(filename: &str) -> (String, String) {
-    let (artist, title) = filename
-        .split_once('-')
-        .expect("Can't extract artist and title from the filename");
+    let (artist, title) = match filename.split_once('-') {
+        Some((a, t)) => (a, t),
+        None => ("", filename),
+    };
+    // .expect("Can't extract artist and title from the filename");
 
     let title = Path::new(title).file_stem().unwrap().to_string_lossy();
 
@@ -195,16 +196,15 @@ fn get_metadata(file: impl AsRef<Path>) -> Metadata {
     metadata
 }
 
-fn get_files_list(
-    files_from_args: Vec<String>,
-    files_from_stdin: Vec<String>,
+fn get_all_files(
+    files_from_args: &[Box<Path>],
+    files_from_stdin: &[Box<Path>],
 ) -> Vec<File> {
-    let files_iter = files_from_args.into_iter().chain(files_from_stdin);
-
     let mut files = Vec::new();
+    let files_iter = files_from_stdin.iter().chain(files_from_args);
 
     for file in files_iter {
-        files.push(File::new(&file));
+        files.push(File::new(file));
     }
 
     files
@@ -212,15 +212,19 @@ fn get_files_list(
 
 fn main() {
     let args = Args::parse();
-    let files_from_args = args.files.unwrap_or(Vec::new());
+
+    let files_from_args = &args.files.unwrap_or(Vec::new());
 
     let files_from_stdin = if atty::is(Stream::Stdin) {
         Vec::new()
     } else {
-        io::stdin().lines().map(|x| x.unwrap()).collect()
+        io::stdin()
+            .lines()
+            .map(|x| Path::new(&x.unwrap()).into())
+            .collect()
     };
 
-    let files = get_files_list(files_from_args, files_from_stdin);
+    let files = get_all_files(files_from_args, &files_from_stdin);
 
     files
         .iter()
