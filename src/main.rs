@@ -5,7 +5,7 @@ use id3::Version;
 use std::ffi::OsStr;
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use atty::Stream;
 
@@ -19,13 +19,13 @@ struct Args {
     #[clap(flatten)]
     metadata: Metadata,
 
-    #[arg(long)]
+    #[arg(long, visible_alias = "te")]
     title_exec: Option<String>,
 
-    #[arg(long)]
+    #[arg(long, visible_alias = "ae")]
     artist_exec: Option<String>,
 
-    files: Option<Vec<Box<Path>>>,
+    files: Vec<PathBuf>,
 }
 
 #[derive(clap::Args, Clone, Default, Debug)]
@@ -36,11 +36,11 @@ struct Metadata {
     #[arg(long, short)]
     artist: Option<String>,
 
-    #[arg(short = 'T', long)]
+    #[arg(long, visible_alias = "at")]
     album_title: Option<String>,
 
-    #[arg(short = 'C', long)]
-    album_cover: Option<Box<Path>>,
+    #[arg(long, visible_alias = "ac")]
+    album_cover: Option<PathBuf>,
 
     #[arg(long, short)]
     year: Option<u32>,
@@ -48,13 +48,13 @@ struct Metadata {
 
 #[derive(Debug)]
 struct File {
-    path: Box<Path>,
+    path: PathBuf,
     metadata: Metadata,
 }
 
 impl File {
     fn new(file: impl AsRef<Path>) -> Self {
-        let path = file.as_ref().to_owned().into();
+        let path = file.as_ref().to_owned();
         let metadata = get_metadata(&file);
 
         Self { path, metadata }
@@ -197,8 +197,8 @@ fn get_metadata(file: impl AsRef<Path>) -> Metadata {
 }
 
 fn get_all_files(
-    files_from_args: &[Box<Path>],
-    files_from_stdin: &[Box<Path>],
+    files_from_args: &[PathBuf],
+    files_from_stdin: &[PathBuf],
 ) -> Vec<File> {
     let mut files = Vec::new();
     let files_iter = files_from_stdin.iter().chain(files_from_args);
@@ -213,7 +213,7 @@ fn get_all_files(
 fn main() {
     let args = Args::parse();
 
-    let files_from_args = &args.files.unwrap_or(Vec::new());
+    let files_from_args = &args.files;
 
     let files_from_stdin = if atty::is(Stream::Stdin) {
         Vec::new()
