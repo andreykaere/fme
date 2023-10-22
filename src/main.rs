@@ -6,6 +6,7 @@ use std::ffi::OsStr;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::process;
 
 use atty::Stream;
 
@@ -52,8 +53,33 @@ struct File {
     metadata: Metadata,
 }
 
+fn get_extension(file: impl AsRef<Path>) -> String {
+    let ext = file.as_ref().extension();
+
+    match ext {
+        Some(x) => x.to_string_lossy().to_string().to_lowercase(),
+        None => "".to_string(),
+    }
+}
+
+fn is_supported_type(ext: &str) -> bool {
+    ["mp3", "flac", "mp4", "m4a", "m4b", "m4p", "m4v", "isom"].contains(&ext)
+}
+
 impl File {
     fn new(file: impl AsRef<Path>) -> Self {
+        let ext = get_extension(&file);
+
+        if ext.is_empty() {
+            println!("Can't figure out filetype of the file without extension");
+            process::exit(2);
+        }
+
+        if !is_supported_type(&ext) {
+            println!("Filetype '{ext}' is not supported");
+            process::exit(2);
+        }
+
         let path = file.as_ref().to_owned();
         let metadata = get_metadata(&file);
 
@@ -105,7 +131,8 @@ fn write_metadata(file: &File, metadata: &Metadata) {
         Ok(t) => t,
         Err(_) => {
             init_metadata(file);
-            tag.read_from_path(&file.path).unwrap()
+            tag.read_from_path(&file.path)
+                .expect("Could not init metadata")
         }
     };
 
@@ -142,11 +169,11 @@ fn write_metadata(file: &File, metadata: &Metadata) {
     tag.write_to_path(&file.path.to_string_lossy()).unwrap();
 }
 
-fn process_file(file: &File, metadata: &Metadata) {
-    let metadata_default = &file.metadata;
+fn process_file(file: &File, metadata_specified: &Metadata) {
+    let metadata = &file.metadata;
 
-    write_metadata(file, metadata_default);
     write_metadata(file, metadata);
+    write_metadata(file, metadata_specified);
 }
 
 fn get_filename(file: impl AsRef<Path>) -> String {
