@@ -185,9 +185,12 @@ fn get_filename(file: impl AsRef<Path>) -> String {
 }
 
 fn artist_and_title(filename: &str) -> (String, String) {
-    let (artist, title) = match filename.split_once('-') {
+    let (artist, title) = match filename.split_once('–') {
         Some((a, t)) => (a, t),
-        None => ("", filename),
+        None => match filename.split_once('-') {
+            Some((a, t)) => (a, t),
+            None => ("", filename),
+        },
     };
     // .expect("Can't extract artist and title from the filename");
 
