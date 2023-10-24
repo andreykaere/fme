@@ -16,7 +16,7 @@ use atty::Stream;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
-struct Args {
+pub struct Args {
     #[clap(flatten)]
     metadata: Metadata,
 
@@ -185,12 +185,13 @@ fn get_filename(file: impl AsRef<Path>) -> String {
 }
 
 fn artist_and_title(filename: &str) -> (String, String) {
-    let (artist, title) = match filename.split_once('–') {
-        Some((a, t)) => (a, t),
-        None => match filename.split_once('-') {
+    let (artist, title) = if let Some((a, t)) = filename.split_once('-') {
+        (a, t)
+    } else {
+        match filename.split_once('–') {
             Some((a, t)) => (a, t),
             None => ("", filename),
-        },
+        }
     };
     // .expect("Can't extract artist and title from the filename");
 
@@ -259,4 +260,29 @@ fn main() {
     files
         .iter()
         .for_each(|file| process_file(file, &args.metadata));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory as _;
+    use clap_complete::{generate, Generator, Shell};
+    use std::fs;
+
+    #[test]
+    fn generate_completions() {
+        let mut cmd = Args::command();
+
+        for (shell, file) in &[
+            (Shell::Bash, "fme.bash"),
+            (Shell::Fish, "fme.fish"),
+            (Shell::Zsh, "_fme"),
+        ] {
+            let mut file =
+                fs::File::create(format!("./extra/completions/{}", file))
+                    .unwrap();
+
+            clap_complete::generate(*shell, &mut cmd, "fme", &mut file);
+        }
+    }
 }
