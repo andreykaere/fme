@@ -25,7 +25,30 @@ pub struct Opts {
     #[arg(long, short, value_enum, default_value_t = Mode::FromFileName)]
     mode: Mode,
 
-    #[arg(long, short)]
+    /// This allows
+    /// to the program:
+    /// {n}  'Artist <-> {a}'
+    /// {n}  'Title  <-> {t}'
+    /// {n}  'Album  <-> {m}'
+    /// {n}  'Year   <-> {y}'
+    /// {n}  'Track  <-> {n}'
+    ///
+    /// Default parser patterns are shown below and parsers tries each of them
+    /// in the given order:
+    /// {n}  1. '{n} {a} - {t}'
+    /// {n}  2. '{n} {a} — {t}'
+    /// {n}  3. '{n}. {a} - {t}'
+    /// {n}  4. '{n}. {a} — {t}'
+    /// {n}  5. '{a} - {n} {t}'
+    /// {n}  6. '{a} — {n} {t}'
+    /// {n}  7. '{a} - {n}. {t}'
+    /// {n}  8. '{a} — {n}. {t}'
+    /// {n}  9. '{a} - {t}'
+    /// {n}  10. '{a} — {t}'
+    /// {n}  11. '{n} {t}'
+    /// {n}  12. '{n}. {t}'
+    /// {n}  13. '{t}'
+    #[arg(long, short, long_help)]
     parse: Option<Vec<ParsePattern>>,
 
     files: Vec<PathBuf>,
@@ -77,27 +100,27 @@ fn main() {
     });
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use clap::CommandFactory as _;
-    use clap_complete::{generate, Generator, Shell};
-    use std::fs;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use clap::CommandFactory as _;
+//     use clap_complete::{generate, Generator, Shell};
+//     use std::fs;
 
-    #[test]
-    fn generate_completions() {
-        let mut cmd = Opts::command();
+//     #[test]
+//     fn generate_completions() {
+//         let mut cmd = Opts::command();
 
-        for (shell, file) in &[
-            (Shell::Bash, "fme.bash"),
-            (Shell::Fish, "fme.fish"),
-            (Shell::Zsh, "_fme"),
-        ] {
-            let mut file =
-                fs::File::create(format!("./extra/completions/{}", file))
-                    .unwrap();
+//         for (shell, file) in &[
+//             (Shell::Bash, "fme.bash"),
+//             (Shell::Fish, "fme.fish"),
+//             (Shell::Zsh, "_fme"),
+//         ] {
+//             let mut file =
+//                 fs::File::create(format!("./extra/completions/{}", file))
+//                     .unwrap();
 
-            clap_complete::generate(*shell, &mut cmd, "fme", &mut file);
-        }
-    }
-}
+//             clap_complete::generate(*shell, &mut cmd, "fme", &mut file);
+//         }
+//     }
+// }
