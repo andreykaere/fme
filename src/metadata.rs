@@ -5,7 +5,6 @@ use id3::Version;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process;
 
 use crate::parse::ParsePattern;
 use crate::Mode;
@@ -74,13 +73,15 @@ impl AudioFile {
         let path = file.as_ref().to_owned();
 
         if ext.is_empty() {
-            println!("Can't figure out filetype of the file without extension");
-            process::exit(2);
+            eprintln!(
+                "Can't figure out filetype of the file without extension"
+            );
+            std::process::exit(2);
         }
 
         if !is_supported_type(&ext) {
-            println!("Filetype '{ext}' is not supported");
-            process::exit(2);
+            eprintln!("Filetype '{ext}' is not supported");
+            std::process::exit(2);
         }
 
         Self { path }
@@ -190,6 +191,9 @@ impl AudioFile {
         if let Ok(mut derived_metadata) = try_derive_metadata {
             derived_metadata.update(metadata);
             self.write_metadata(&derived_metadata);
+        } else {
+            eprintln!("Couldn't apply given patterns to the filename");
+            std::process::exit(2);
         }
     }
 
@@ -197,6 +201,8 @@ impl AudioFile {
         &self,
         parse_patterns: &[ParsePattern],
     ) -> anyhow::Result<Metadata> {
+        println!("patterns: {:?}", parse_patterns);
+
         let filename =
             self.path.file_stem().unwrap().to_string_lossy().to_string();
 
@@ -206,6 +212,7 @@ impl AudioFile {
                 //     "WITH PATTERN: {:?}, PARSED METADATA: {:?}",
                 //     pattern, metadata
                 // );
+                println!("foo");
                 return Ok(metadata);
             }
         }

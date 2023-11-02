@@ -52,6 +52,7 @@ impl ParsePattern {
             .collect::<Vec<_>>()
             .join("");
         regex_str.push('$');
+        regex_str.insert(0, '^');
 
         println!("{regex_str}");
 
@@ -145,12 +146,15 @@ enum Token {
 
 impl Token {
     fn token_to_regex_repr(&self) -> String {
+        let regex_text = r"([a-zA-Z0-9&'\s\{\}\[\]\(\)_]+)";
+        let regex_num = r"([0-9]+)";
+
         let regex_repr = match self {
-            Token::Artist => r"([a-zA-Z0-9&'\s]+)",
-            Token::Title => r"([a-zA-Z0-9&'\s]+)",
-            Token::Album => r"([a-zA-Z0-9&'\s]+)",
-            Token::Year => r"([0-9]+)",
-            Token::Track => r"([0-9]+)",
+            Token::Artist => regex_text,
+            Token::Title => regex_text,
+            Token::Album => regex_text,
+            Token::Year => regex_num,
+            Token::Track => regex_num,
         };
 
         regex_repr.to_string()
@@ -249,7 +253,7 @@ mod tests {
     fn test_patterns() {
         let pattern1 = ParsePattern::from_str("{n}. {a} - {t}").unwrap();
         let input1 = "12. Foo - Bar";
-        let input1_ = "12. Foo & Bazz & Quuz vs Booz & Tooz - Bar";
+        let input1_ = "12. Foo & Bazz & Quuz vs Booz & Tooz - Bar (no {quuz})";
         // println!("{:?}", pattern1.try_pattern(input1));
         assert!(pattern1.try_pattern(input1).is_ok());
         assert!(pattern1.try_pattern(input1_).is_ok());
