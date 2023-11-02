@@ -1,4 +1,5 @@
 use anyhow::bail;
+use regex::Regex;
 use std::str::FromStr;
 
 use crate::metadata::Metadata;
@@ -7,12 +8,12 @@ const TOKEN_VALUES: [&str; 5] = ["{a}", "{t}", "{n}", "{m}", "{y}"];
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsePattern {
-    args: Vec<ArgumentPattern>,
+    items: Vec<ItemPattern>,
 }
 
 impl ParsePattern {
-    fn new(args: Vec<ArgumentPattern>) -> Self {
-        Self { args }
+    fn new(items: Vec<ItemPattern>) -> Self {
+        Self { items }
     }
 
     pub fn default_patterns() -> Vec<Self> {
@@ -34,15 +35,53 @@ impl ParsePattern {
 
         patterns
             .iter()
-            .map(|x| ParsePattern::from_str(x))
-            .filter_map(|x| x.ok())
+            .map(|x| ParsePattern::from_str(x).unwrap())
             .collect()
     }
 
     pub fn try_pattern(&self, input: &str) -> anyhow::Result<Metadata> {
-        todo!();
+        let mut metadata = Metadata::default();
 
-        bail!("Failed to parse given string using this pattern");
+        let mut regex_str = self
+            .items
+            .iter()
+            .map(|x| match x {
+                ItemPattern::Text(s) => regex::escape(s),
+                ItemPattern::Token(t) => t.token_to_regex_repr(),
+            })
+            .collect::<Vec<_>>()
+            .join("");
+        regex_str.push('$');
+
+        println!("{regex_str}");
+
+        let regex = Regex::new(&regex_str).unwrap();
+
+        let caps = match regex.captures(input) {
+            Some(x) => x,
+            None => bail!("Failed to parse given string using this pattern"),
+        };
+
+        println!("caps: {:?}", caps);
+
+        let tokens: Vec<_> = self
+            .items
+            .iter()
+            .filter_map(|x| {
+                if let ItemPattern::Token(token) = x {
+                    Some(token)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for (i, token) in tokens.iter().enumerate() {
+            let value = caps.get(i + 1).unwrap().as_str();
+            token.apply_token(value, &mut metadata)?;
+        }
+
+        Ok(metadata)
     }
 }
 
@@ -55,41 +94,42 @@ fn keep_split<'a>(input: &'a str, token: &'a str) -> Vec<&'a str> {
 impl FromStr for ParsePattern {
     type Err = anyhow::Error;
 
-    // TODO: to add error support
     fn from_str(string: &str) -> Result<Self, Self::Err> {
         let mut split = vec![string];
 
         for token in TOKEN_VALUES {
-            split = split.iter().fold(Vec::new(), |acc, x| {
-                [acc, keep_split(x, token)].concat()
+            split = split.iter().fold(Vec::new(), |mut acc, x| {
+                acc.append(&mut keep_split(x, token));
+                acc
             });
         }
 
-        println!("{:?}", split);
+        let mut items = Vec::new();
 
-        let args = split
-            .iter()
-            .map(|x| ArgumentPattern::from_str(x))
-            .filter_map(|x| x.ok())
-            .collect();
+        for s in split {
+            match ItemPattern::from_str(s) {
+                Ok(s) => items.push(s),
+                Err(e) => bail!("{e}"),
+            }
+        }
 
-        Ok(ParsePattern::new(args))
+        Ok(ParsePattern::new(items))
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum ArgumentPattern {
+enum ItemPattern {
     Text(String),
     Token(Token),
 }
 
-impl FromStr for ArgumentPattern {
+impl FromStr for ItemPattern {
     type Err = anyhow::Error;
 
     fn from_str(string: &str) -> Result<Self, Self::Err> {
         match Token::from_str(string) {
-            Ok(x) => Ok(ArgumentPattern::Token(x)),
-            Err(_) => Ok(ArgumentPattern::Text(string.to_string())),
+            Ok(x) => Ok(ItemPattern::Token(x)),
+            Err(_) => Ok(ItemPattern::Text(string.to_string())),
         }
     }
 }
@@ -101,6 +141,38 @@ enum Token {
     Album,
     Year,
     Track,
+}
+
+impl Token {
+    fn token_to_regex_repr(&self) -> String {
+        let regex_repr = match self {
+            Token::Artist => r"([a-zA-Z0-9&'\s]+)",
+            Token::Title => r"([a-zA-Z0-9&'\s]+)",
+            Token::Album => r"([a-zA-Z0-9&'\s]+)",
+            Token::Year => r"([0-9]+)",
+            Token::Track => r"([0-9]+)",
+        };
+
+        regex_repr.to_string()
+    }
+
+    fn apply_token(
+        &self,
+        value: &str,
+        metadata: &mut Metadata,
+    ) -> anyhow::Result<()> {
+        println!("token: {:?} and value: {value}", self);
+
+        match self {
+            Token::Artist => metadata.artist = Some(value.parse()?),
+            Token::Title => metadata.title = Some(value.parse()?),
+            Token::Album => metadata.album_title = Some(value.parse()?),
+            Token::Year => metadata.year = Some(value.parse()?),
+            Token::Track => metadata.track_number = Some(value.parse()?),
+        }
+
+        Ok(())
+    }
 }
 
 impl FromStr for Token {
@@ -125,36 +197,88 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_from_str() {
+    fn test_pattern_from_str() {
         assert_eq!(
             ParsePattern::from_str("{n} {a} - {t}").unwrap(),
             ParsePattern::new(
                 [
-                    ArgumentPattern::Token(Token::Track),
-                    ArgumentPattern::Text(" ".to_string()),
-                    ArgumentPattern::Token(Token::Artist),
-                    ArgumentPattern::Text(" - ".to_string()),
-                    ArgumentPattern::Token(Token::Title)
+                    ItemPattern::Token(Token::Track),
+                    ItemPattern::Text(" ".to_string()),
+                    ItemPattern::Token(Token::Artist),
+                    ItemPattern::Text(" - ".to_string()),
+                    ItemPattern::Token(Token::Title)
                 ]
                 .to_vec()
             )
         );
-        // ["{n}", " ", "{a}", " - ", "{t}"]
 
-        // let patterns = [
-        //     ,
-        //     "{n} {a} — {t}",
-        //     "{n}. {a} - {t}",
-        //     "{n}. {a} — {t}",
-        //     "{a} - {n} {t}",
-        //     "{a} — {n} {t}",
-        //     "{a} - {n}. {t}",
-        //     "{a} — {n}. {t}",
-        //     "{a} - {t}",
-        //     "{a} — {t}",
-        //     "{n} {t}",
-        //     "{n}. {t}",
-        //     "{t}",
-        // ];
+        assert_eq!(
+            ParsePattern::from_str("{n}. {a} — {t}").unwrap(),
+            ParsePattern::new(
+                [
+                    ItemPattern::Token(Token::Track),
+                    ItemPattern::Text(". ".to_string()),
+                    ItemPattern::Token(Token::Artist),
+                    ItemPattern::Text(" — ".to_string()),
+                    ItemPattern::Token(Token::Title)
+                ]
+                .to_vec()
+            )
+        );
+
+        assert_eq!(
+            ParsePattern::from_str("{a}{a} - {t}").unwrap(),
+            ParsePattern::new(
+                [
+                    ItemPattern::Token(Token::Artist),
+                    ItemPattern::Token(Token::Artist),
+                    ItemPattern::Text(" - ".to_string()),
+                    ItemPattern::Token(Token::Title)
+                ]
+                .to_vec()
+            )
+        );
+
+        assert_eq!(
+            ParsePattern::from_str("{t}").unwrap(),
+            ParsePattern::new([ItemPattern::Token(Token::Title)].to_vec())
+        );
+    }
+
+    #[test]
+    fn test_patterns() {
+        let pattern1 = ParsePattern::from_str("{n}. {a} - {t}").unwrap();
+        let input1 = "12. Foo - Bar";
+        let input1_ = "12. Foo & Bazz & Quuz vs Booz & Tooz - Bar";
+        // println!("{:?}", pattern1.try_pattern(input1));
+        assert!(pattern1.try_pattern(input1).is_ok());
+        assert!(pattern1.try_pattern(input1_).is_ok());
+
+        // println!(
+        //     "{}",
+        //     regex::escape(r"([0-9]+)\. ([a-zA-Z0-9&']+) \- ([a-zA-Z0-9&']+)$")
+        // );
+
+        let pattern2 = ParsePattern::from_str("{n}. {t}").unwrap();
+        let input2 = "12. Foo - Bar";
+        // println!("{:?}", pattern2.try_pattern(input2));
+        assert!(pattern2.try_pattern(input2).is_err());
     }
 }
+// ["{n}", " ", "{a}", " - ", "{t}"]
+
+// let patterns = [
+//     ,
+//     "{n} {a} — {t}",
+//     "{n}. {a} - {t}",
+//     "{n}. {a} — {t}",
+//     "{a} - {n} {t}",
+//     "{a} — {n} {t}",
+//     "{a} - {n}. {t}",
+//     "{a} — {n}. {t}",
+//     "{a} - {t}",
+//     "{a} — {t}",
+//     "{n} {t}",
+//     "{n}. {t}",
+//     "{t}",
+// ];

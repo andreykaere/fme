@@ -13,22 +13,22 @@ use crate::Mode;
 #[derive(clap::Args, Clone, Default, Debug)]
 pub struct Metadata {
     #[arg(long, short)]
-    title: Option<String>,
+    pub title: Option<String>,
 
     #[arg(long, short)]
-    artist: Option<String>,
+    pub artist: Option<String>,
 
     #[arg(long, visible_alias = "at")]
-    album_title: Option<String>,
+    pub album_title: Option<String>,
 
     #[arg(long, visible_alias = "ac")]
-    album_cover: Option<PathBuf>,
+    pub album_cover: Option<PathBuf>,
 
     #[arg(long, short)]
-    year: Option<u32>,
+    pub year: Option<u32>,
 
     #[arg(long, visible_alias = "tn")]
-    track_number: Option<u16>,
+    pub track_number: Option<u16>,
 }
 
 impl Metadata {
@@ -178,7 +178,7 @@ impl AudioFile {
         mode: Mode,
         parse_patterns: Option<&[ParsePattern]>,
     ) {
-        let mut try_derive_metadata = match mode {
+        let try_derive_metadata = match mode {
             Mode::FromFileName => {
                 // TODO: THINK THROUGH UNWRAP
                 self.metadata_from_filename(parse_patterns.unwrap())
@@ -198,10 +198,14 @@ impl AudioFile {
         parse_patterns: &[ParsePattern],
     ) -> anyhow::Result<Metadata> {
         let filename =
-            self.path.file_name().unwrap().to_string_lossy().to_string();
+            self.path.file_stem().unwrap().to_string_lossy().to_string();
 
         for pattern in parse_patterns {
             if let Ok(metadata) = pattern.try_pattern(&filename) {
+                // println!(
+                //     "WITH PATTERN: {:?}, PARSED METADATA: {:?}",
+                //     pattern, metadata
+                // );
                 return Ok(metadata);
             }
         }
