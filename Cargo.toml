@@ -8,7 +8,8 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.75"
 atty = "0.2.14"
-audiotags = "0.4.1"
+# audiotags = "0.4.1"
+audiotags = { git = "https://github.com/andreykaere/audiotags.git" }
 clap = { version = "4.4.6", features = ["derive"] }
 clap_complete = "4.4.3"
 id3 = "1.8.0"

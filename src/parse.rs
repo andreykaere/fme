@@ -54,7 +54,7 @@ impl ParsePattern {
         regex_str.push('$');
         regex_str.insert(0, '^');
 
-        println!("{regex_str}");
+        // println!("{regex_str}");
 
         let regex = Regex::new(&regex_str).unwrap();
 
@@ -63,7 +63,7 @@ impl ParsePattern {
             None => bail!("Failed to parse given string using this pattern"),
         };
 
-        println!("caps: {:?}", caps);
+        // println!("caps: {:?}", caps);
 
         let tokens: Vec<_> = self
             .items
@@ -165,7 +165,7 @@ impl Token {
         value: &str,
         metadata: &mut Metadata,
     ) -> anyhow::Result<()> {
-        println!("token: {:?} and value: {value}", self);
+        // println!("token: {:?} and value: {value}", self);
 
         match self {
             Token::Artist => metadata.artist = Some(value.parse()?),

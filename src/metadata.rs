@@ -107,6 +107,16 @@ impl AudioFile {
                     .unwrap();
             }
 
+            "wav" => {
+                let new_tag = id3::Tag::new();
+                new_tag
+                    .write_to_wav_path(
+                        self.path.to_string_lossy().to_string(),
+                        Version::Id3v24,
+                    )
+                    .unwrap();
+            }
+
             "m4a" | "m4b" | "m4p" | "m4v" | "isom" | "mp4" => {
                 let new_tag = mp4ameta::Tag::default();
                 new_tag
@@ -131,8 +141,14 @@ impl AudioFile {
             Ok(t) => t,
             Err(_) => {
                 self.init_metadata();
+
+                // if self.path.extension().unwrap() == "wav" {
+                //     // Id3v2Tag::read_from_wav_path(&self.path)
+                //     //     .expect("Could not init metadata")
+                // } else {
                 tag.read_from_path(&self.path)
                     .expect("Could not init metadata")
+                // }
             }
         };
 
@@ -201,7 +217,7 @@ impl AudioFile {
         &self,
         parse_patterns: &[ParsePattern],
     ) -> anyhow::Result<Metadata> {
-        println!("patterns: {:?}", parse_patterns);
+        // println!("patterns: {:?}", parse_patterns);
 
         let filename =
             self.path.file_stem().unwrap().to_string_lossy().to_string();
@@ -212,7 +228,7 @@ impl AudioFile {
                 //     "WITH PATTERN: {:?}, PARSED METADATA: {:?}",
                 //     pattern, metadata
                 // );
-                println!("foo");
+                // println!("foo");
                 return Ok(metadata);
             }
         }
@@ -226,5 +242,8 @@ impl AudioFile {
 }
 
 fn is_supported_type(ext: &str) -> bool {
-    ["mp3", "flac", "mp4", "m4a", "m4b", "m4p", "m4v", "isom"].contains(&ext)
+    [
+        "mp3", "wav", "flac", "mp4", "m4a", "m4b", "m4p", "m4v", "isom",
+    ]
+    .contains(&ext)
 }
