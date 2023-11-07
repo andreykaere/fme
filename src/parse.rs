@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use crate::metadata::Metadata;
 
-const TOKEN_VALUES: [&str; 5] = ["{a}", "{t}", "{n}", "{m}", "{y}"];
+const TOKEN_VALUES: [&str; 5] = ["{a}", "{t}", "{d}", "{m}", "{y}"];
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsePattern {
@@ -18,18 +18,18 @@ impl ParsePattern {
 
     pub fn default_patterns() -> Vec<Self> {
         let patterns = [
-            "{n} {a} - {t}",
-            "{n} {a} — {t}",
-            "{n}. {a} - {t}",
-            "{n}. {a} — {t}",
-            "{a} - {n} {t}",
-            "{a} — {n} {t}",
-            "{a} - {n}. {t}",
-            "{a} — {n}. {t}",
+            "{d} {a} - {t}",
+            "{d} {a} — {t}",
+            "{d}. {a} - {t}",
+            "{d}. {a} — {t}",
+            "{a} - {d} {t}",
+            "{a} — {d} {t}",
+            "{a} - {d}. {t}",
+            "{a} — {d}. {t}",
             "{a} - {t}",
             "{a} — {t}",
-            "{n} {t}",
-            "{n}. {t}",
+            "{d} {t}",
+            "{d}. {t}",
             "{t}",
         ];
 
@@ -146,7 +146,7 @@ enum Token {
 
 impl Token {
     fn token_to_regex_repr(&self) -> String {
-        let regex_text = r"([a-zA-Z0-9&'\s\{\}\[\]\(\)_]+)";
+        let regex_text = r"([a-zA-Z0-9&'\s\{\}\[\]\(\)_\.,\*]+)";
         let regex_num = r"([0-9]+)";
 
         let regex_repr = match self {
@@ -188,7 +188,7 @@ impl FromStr for Token {
             "{t}" => Token::Title,
             "{m}" => Token::Album,
             "{y}" => Token::Year,
-            "{n}" => Token::Track,
+            "{d}" => Token::Track,
             _ => bail!("Uknown token"),
         };
 
@@ -203,7 +203,7 @@ mod tests {
     #[test]
     fn test_pattern_from_str() {
         assert_eq!(
-            ParsePattern::from_str("{n} {a} - {t}").unwrap(),
+            ParsePattern::from_str("{d} {a} - {t}").unwrap(),
             ParsePattern::new(
                 [
                     ItemPattern::Token(Token::Track),
@@ -217,7 +217,7 @@ mod tests {
         );
 
         assert_eq!(
-            ParsePattern::from_str("{n}. {a} — {t}").unwrap(),
+            ParsePattern::from_str("{d}. {a} — {t}").unwrap(),
             ParsePattern::new(
                 [
                     ItemPattern::Token(Token::Track),
@@ -251,7 +251,7 @@ mod tests {
 
     #[test]
     fn test_patterns() {
-        let pattern1 = ParsePattern::from_str("{n}. {a} - {t}").unwrap();
+        let pattern1 = ParsePattern::from_str("{d}. {a} - {t}").unwrap();
         let input1 = "12. Foo - Bar";
         let input1_ = "12. Foo & Bazz & Quuz vs Booz & Tooz - Bar (no {quuz})";
         // println!("{:?}", pattern1.try_pattern(input1));
@@ -263,26 +263,9 @@ mod tests {
         //     regex::escape(r"([0-9]+)\. ([a-zA-Z0-9&']+) \- ([a-zA-Z0-9&']+)$")
         // );
 
-        let pattern2 = ParsePattern::from_str("{n}. {t}").unwrap();
+        let pattern2 = ParsePattern::from_str("{d}. {t}").unwrap();
         let input2 = "12. Foo - Bar";
         // println!("{:?}", pattern2.try_pattern(input2));
         assert!(pattern2.try_pattern(input2).is_err());
     }
 }
-// ["{n}", " ", "{a}", " - ", "{t}"]
-
-// let patterns = [
-//     ,
-//     "{n} {a} — {t}",
-//     "{n}. {a} - {t}",
-//     "{n}. {a} — {t}",
-//     "{a} - {n} {t}",
-//     "{a} — {n} {t}",
-//     "{a} - {n}. {t}",
-//     "{a} — {n}. {t}",
-//     "{a} - {t}",
-//     "{a} — {t}",
-//     "{n} {t}",
-//     "{n}. {t}",
-//     "{t}",
-// ];

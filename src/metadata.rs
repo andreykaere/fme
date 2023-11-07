@@ -11,21 +11,27 @@ use crate::Mode;
 
 #[derive(clap::Args, Clone, Default, Debug)]
 pub struct Metadata {
+    /// Write specified value to the 'title' tag
     #[arg(long, short)]
     pub title: Option<String>,
 
+    /// Write specified value to the 'artist' tag
     #[arg(long, short)]
     pub artist: Option<String>,
 
+    /// Write specified value to the 'album' tag
     #[arg(long, visible_alias = "at")]
     pub album_title: Option<String>,
 
+    /// Set the image, located at the given path, as an album cover
     #[arg(long, visible_alias = "ac")]
     pub album_cover: Option<PathBuf>,
 
+    /// Write specified value to the 'year' tag
     #[arg(long, short)]
     pub year: Option<u32>,
 
+    /// Write specified value to the 'track number' tag
     #[arg(long, visible_alias = "tn")]
     pub track_number: Option<u16>,
 }
@@ -64,7 +70,7 @@ pub struct AudioFile {
 }
 
 impl AudioFile {
-    pub fn new(file: impl AsRef<Path>) -> Self {
+    pub fn new(file: impl AsRef<Path>) -> anyhow::Result<Self> {
         let ext = match file.as_ref().extension() {
             Some(x) => x.to_string_lossy().to_string().to_lowercase(),
             None => "".to_string(),
@@ -72,22 +78,26 @@ impl AudioFile {
 
         let path = file.as_ref().to_owned();
 
+        if !path.is_file() {
+            bail!("There is no such file: '{}'", path.to_string_lossy());
+        }
+
         if ext.is_empty() {
-            eprintln!(
-                "Can't figure out filetype of the file without extension"
+            bail!(
+                "Can't figure out filetype of the file '{}', \
+            because there is no extension",
+                path.to_string_lossy()
             );
-            std::process::exit(2);
         }
 
         if !is_supported_type(&ext) {
-            eprintln!("Filetype '{ext}' is not supported");
-            std::process::exit(2);
+            bail!("Filetype '{ext}' is not supported");
         }
 
-        Self { path }
+        Ok(Self { path })
     }
 
-    fn init_metadata(&self) {
+    fn init_metadata(&self) -> anyhow::Result<()> {
         match self
             .path
             .extension()
@@ -99,56 +109,57 @@ impl AudioFile {
         {
             "mp3" => {
                 let new_tag = id3::Tag::new();
-                new_tag
-                    .write_to_path(
-                        self.path.to_string_lossy().to_string(),
-                        Version::Id3v24,
-                    )
-                    .unwrap();
+                new_tag.write_to_path(
+                    self.path.to_string_lossy().to_string(),
+                    Version::Id3v24,
+                )?
             }
 
             "wav" => {
                 let new_tag = id3::Tag::new();
-                new_tag
-                    .write_to_wav_path(
-                        self.path.to_string_lossy().to_string(),
-                        Version::Id3v24,
-                    )
-                    .unwrap();
+                new_tag.write_to_wav_path(
+                    self.path.to_string_lossy().to_string(),
+                    Version::Id3v24,
+                )?
             }
 
             "m4a" | "m4b" | "m4p" | "m4v" | "isom" | "mp4" => {
                 let new_tag = mp4ameta::Tag::default();
                 new_tag
-                    .write_to_path(self.path.to_string_lossy().to_string())
-                    .unwrap();
+                    .write_to_path(self.path.to_string_lossy().to_string())?
             }
 
             "flac" => {
                 let mut new_tag = metaflac::Tag::new();
                 new_tag
-                    .write_to_path(self.path.to_string_lossy().to_string())
-                    .unwrap();
+                    .write_to_path(self.path.to_string_lossy().to_string())?
             }
 
             _ => unimplemented!("Other file formats are not supported"),
         }
+
+        Ok(())
     }
 
-    pub fn write_metadata(&self, metadata: &Metadata) {
+    pub fn write_metadata(&self, metadata: &Metadata) -> anyhow::Result<()> {
         let tag = Tag::new();
         let mut tag = match tag.read_from_path(&self.path) {
             Ok(t) => t,
             Err(_) => {
-                self.init_metadata();
+                if self.init_metadata().is_err() {
+                    bail!(
+                        "Failed to init metadata tags in the file '{}'",
+                        self.path.file_name().unwrap().to_string_lossy()
+                    );
+                }
 
-                // if self.path.extension().unwrap() == "wav" {
-                //     // Id3v2Tag::read_from_wav_path(&self.path)
-                //     //     .expect("Could not init metadata")
-                // } else {
-                tag.read_from_path(&self.path)
-                    .expect("Could not init metadata")
-                // }
+                match tag.read_from_path(&self.path) {
+                    Ok(t) => t,
+                    Err(_) => bail!(
+                        "Failed to read metadata tags from the file '{}'",
+                        self.path.file_name().unwrap().to_string_lossy()
+                    ),
+                }
             }
         };
 
@@ -166,7 +177,9 @@ impl AudioFile {
             let mimetype = match ext {
                 "png" | "PNG" => MimeType::Png,
                 "jpg" | "jpeg" | "JPG" => MimeType::Jpeg,
-                _ => unimplemented!(),
+                _ => unimplemented!(
+                    "Other image formats are not supported for album cover"
+                ),
             };
 
             let picture = Picture::new(&cover, mimetype);
@@ -186,30 +199,39 @@ impl AudioFile {
             tag.set_track_number(*track_number);
         }
 
-        tag.write_to_path(&self.path.to_string_lossy()).unwrap();
+        if tag.write_to_path(&self.path.to_string_lossy()).is_err() {
+            bail!(
+                "Failed to write metadata tags in the file '{}'",
+                self.path.file_name().unwrap().to_string_lossy()
+            );
+        }
+
+        Ok(())
     }
 
     pub fn process_file(
         &self,
         metadata: &Metadata,
         mode: Mode,
-        parse_patterns: Option<&[ParsePattern]>,
+        parse_patterns: &[ParsePattern],
     ) {
         let try_derive_metadata = match mode {
-            Mode::FromFileName => {
-                // TODO: THINK THROUGH UNWRAP
-                self.metadata_from_filename(parse_patterns.unwrap())
-            }
+            Mode::FromFileName => self.metadata_from_filename(parse_patterns),
 
             Mode::FromInternet => self.metadata_from_internet(),
         };
 
         if let Ok(mut derived_metadata) = try_derive_metadata {
             derived_metadata.update(metadata);
-            self.write_metadata(&derived_metadata);
+
+            if let Err(e) = self.write_metadata(&derived_metadata) {
+                eprintln!("{e}");
+            }
         } else {
-            eprintln!("Couldn't apply given patterns to the filename");
-            std::process::exit(2);
+            eprintln!(
+                "Couldn't apply given patterns to the filename '{}'",
+                self.path.file_stem().unwrap().to_string_lossy()
+            );
         }
     }
 
@@ -217,18 +239,11 @@ impl AudioFile {
         &self,
         parse_patterns: &[ParsePattern],
     ) -> anyhow::Result<Metadata> {
-        // println!("patterns: {:?}", parse_patterns);
-
         let filename =
             self.path.file_stem().unwrap().to_string_lossy().to_string();
 
         for pattern in parse_patterns {
             if let Ok(metadata) = pattern.try_pattern(&filename) {
-                // println!(
-                //     "WITH PATTERN: {:?}, PARSED METADATA: {:?}",
-                //     pattern, metadata
-                // );
-                // println!("foo");
                 return Ok(metadata);
             }
         }
