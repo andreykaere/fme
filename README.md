@@ -1,14 +1,34 @@
-This is fme — flexible metadata editor.
+This is `fme` — flexible metadata editor. You can supply files both as
+arguments and as piping from other command like `find` or `ls`. 
 
+If `fme` fails to get metadata for given file or fails to write extracted
+metadata to it, `fme` will just print a error message and will continue to the
+next file.
 
 ## Usage
 
 ### Options
 
-... <help message>
+```
+Usage: fme [OPTIONS] [FILES]...
+
+Arguments:
+  [FILES]...
+
+Options:
+  -t, --title <TITLE>                Write specified value to the 'title' tag
+  -a, --artist <ARTIST>              Write specified value to the 'artist' tag
+      --album-title <ALBUM_TITLE>    Write specified value to the 'album' tag [aliases: at]
+      --album-cover <ALBUM_COVER>    Set the image, located at the given path, as an album cover [aliases: ac]
+  -y, --year <YEAR>                  Write specified value to the 'year' tag
+      --track-number <TRACK_NUMBER>  Write specified value to the 'track number' tag [aliases: tn]
+  -m, --mode <MODE>                  Set the mode that will be used by the program to determine metadata 
+  -p, --parse <PARSE>                Derive metadata information from the filename using specified patterns
+  -h, --help                         Print help (see more with '--help')
+  -V, --version                      Print version
+```
 
 <!-- Think about two different modes: regex and special parsing -->
-
 
 It is recommended to use [`rnr`](https://github.com/ismaelgv/rnr) utility to
 rename files beforehand if you need it (it might be useful if you download it,
@@ -20,11 +40,24 @@ before using `--parse` option).
 
 ### Basic examples
 
-- Default mode
+- Manually specification
+```
+fme "Foo - Bar.mp3" -a Foo -t Bar
+```
 
-- Specified mode
+- Parsing mode, using default parsers:
+```
+fme "Foo - Bar.mp3"
+```
+In this case, the result will be as in previous example. Here we didn't use
+`--parse` option, because this pattern is one of the default ones and
+therefore does not need to be specified manually. For the complete list of
+default patterns see `fme --help` in the `--parse` option section.
 
-- Unknown to the parser pattern, hence have to be specified manually
+- Unknown to the parser pattern. This time we have to specify it manually:
+```
+fme -p '{d}. {a} - {t} [{m}]' "12. Foo - Bar [Quuz].mp3"
+```
 
 
 ### Advanced example
@@ -47,7 +80,7 @@ comments). Once you have the files, you might want to rename some of them
 using already mentioned `rnr` tool. Now, finally, you need to run, for
 example, this command in the folder where the files are located:
 ```bash
-ls *.mp3 | fme -p '{n} {a} - {t}' --ac cover.jpg -y 2023 --at 'Tomorrowland 2023'
+ls *.mp3 | fme --ac cover.jpg -y 2023 --at 'Tomorrowland 2023'
 ```
 where `cover.jpg` is the album cover that you would like to put (e.g can be
 taken to be the same as thumbnail to the video). 
