@@ -146,7 +146,8 @@ enum Token {
 
 impl Token {
     fn token_to_regex_repr(&self) -> String {
-        let regex_text = r"([a-zA-Z0-9&'\s\{\}\[\]\(\)_\.,\*]+)";
+        // let regex_text = r"([a-zA-Z0-9&'\s\{\}\[\]\(\)_\.,\*]+)";
+        let regex_text = r"(.+?)";
         let regex_num = r"([0-9]+)";
 
         let regex_repr = match self {
@@ -189,7 +190,7 @@ impl FromStr for Token {
             "{m}" => Token::Album,
             "{y}" => Token::Year,
             "{d}" => Token::Track,
-            _ => bail!("Uknown token"),
+            _ => bail!("Unknown token"),
         };
 
         Ok(token)
@@ -266,6 +267,6 @@ mod tests {
         let pattern2 = ParsePattern::from_str("{d}. {t}").unwrap();
         let input2 = "12. Foo - Bar";
         // println!("{:?}", pattern2.try_pattern(input2));
-        assert!(pattern2.try_pattern(input2).is_err());
+        assert!(pattern2.try_pattern(input2).is_ok());
     }
 }
