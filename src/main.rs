@@ -27,7 +27,6 @@ pub struct Opts {
 
     #[arg(
         long,
-        short,
         value_enum,
         default_value_t = Mode::FromFilename,
         help = "Set the mode that will be used by the program to determine metadata",
@@ -145,9 +144,11 @@ fn main() {
 
     let files = get_all_files(files_from_args, &files_from_stdin);
 
-    files
-        .iter()
-        .for_each(|file| file.process_file(metadata, mode, &filename_mode));
+    for file in files {
+        if let Err(e) = file.process_file(metadata, mode, &filename_mode) {
+            eprintln!("{e}");
+        }
+    }
 }
 
 // #[cfg(test)]

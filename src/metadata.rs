@@ -21,7 +21,7 @@ pub struct Metadata {
     pub artist: Option<String>,
 
     /// Write specified value to the 'album' tag
-    #[arg(long, visible_alias = "at")]
+    #[arg(long, short = 'm', visible_alias = "at")]
     pub album_title: Option<String>,
 
     /// Set the image, located at the given path, as an album cover
@@ -30,11 +30,11 @@ pub struct Metadata {
 
     /// Write specified value to the 'year' tag
     #[arg(long, short)]
-    pub year: Option<u32>,
+    pub year: Option<NumberOrToken>,
 
     /// Write specified value to the 'track number' tag
-    #[arg(long, visible_alias = "tn")]
-    pub track_number: Option<u16>,
+    #[arg(long, short = 'd', visible_alias = "tn")]
+    pub track_number: Option<NumberOrToken>,
 }
 
 impl Metadata {
@@ -56,11 +56,29 @@ impl Metadata {
         }
 
         if metadata.year.is_some() {
-            self.year = metadata.year;
+            self.year = metadata.year.clone();
         }
 
         if metadata.track_number.is_some() {
-            self.track_number = metadata.track_number;
+            self.track_number = metadata.track_number.clone();
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum NumberOrToken {
+    Number(u32),
+    Token(String),
+}
+
+impl std::str::FromStr for NumberOrToken {
+    type Err = anyhow::Error;
+
+    fn from_str(string: &str) -> Result<Self, Self::Err> {
+        if string.chars().all(|e| e.is_numeric()) {
+            Ok(Self::Number(string.parse()?))
+        } else {
+            Ok(Self::Token(string.to_string()))
         }
     }
 }
@@ -192,11 +210,25 @@ impl AudioFile {
         }
 
         if let Some(year) = &metadata.year {
-            tag.set_year(*year as i32);
+            if let NumberOrToken::Number(n) = year {
+                tag.set_year(*n as i32);
+            } else {
+                bail!(
+                    "Can't write token to metadata tag 'year', \
+                something went wrong in the program. Please, report a bug."
+                );
+            }
         }
 
         if let Some(track_number) = &metadata.track_number {
-            tag.set_track_number(*track_number);
+            if let NumberOrToken::Number(t) = track_number {
+                tag.set_track_number(*t as u16);
+            } else {
+                bail!(
+                    "Can't write token to metadata tag 'track_number', \
+                something went wrong in the program. Please, report a bug."
+                );
+            }
         }
 
         if tag.write_to_path(&self.path.to_string_lossy()).is_err() {
@@ -214,22 +246,38 @@ impl AudioFile {
         metadata: &Metadata,
         mode: Mode,
         filename_mode: &FilenameMode,
-    ) {
-        let try_derive_metadata = match mode {
+    ) -> anyhow::Result<()> {
+        let try_derive_metadata;
+
+        match mode {
             Mode::FromFilename => match filename_mode {
                 FilenameMode::Parse(parse_patterns) => {
-                    self.parse_metadata_from_filename(parse_patterns)
+                    match self.parse_metadata_from_filename(parse_patterns) {
+                        Ok(x) => try_derive_metadata = Some(x),
+                        Err(e) => bail!(
+                            "Couldn't apply given patterns to the filename '{}', \
+                            the following error occurred: {e}",
+                            self.path.file_stem().unwrap().to_string_lossy()
+                        ),
+                    };
                 }
 
                 FilenameMode::Regex(regex) => {
-                    self.regex_metadata_from_filename(regex, metadata)
+                    match self.regex_metadata_from_filename(regex, metadata) {
+                        Ok(x) => try_derive_metadata = Some(x),
+                        Err(e) => bail!(
+                            "Couldn't apply given regex to the filename '{}', \
+                            the following error occurred: {e}",
+                            self.path.file_stem().unwrap().to_string_lossy()
+                        ),
+                    };
                 }
             },
 
-            Mode::FromInternet => self.metadata_from_internet(),
+            Mode::FromInternet => todo!(), //self.metadata_from_internet(),
         };
 
-        if let Ok(mut derived_metadata) = try_derive_metadata {
+        if let Some(mut derived_metadata) = try_derive_metadata {
             match filename_mode {
                 // We don't want to write specified metadata in case of regex,
                 // because it has been already written with needed tokens applied
@@ -238,15 +286,10 @@ impl AudioFile {
                 _ => derived_metadata.update(metadata),
             }
 
-            if let Err(e) = self.write_metadata(&derived_metadata) {
-                eprintln!("{e}");
-            }
-        } else {
-            eprintln!(
-                "Couldn't apply given patterns to the filename '{}'",
-                self.path.file_stem().unwrap().to_string_lossy()
-            );
+            self.write_metadata(&derived_metadata)?;
         }
+
+        Ok(())
     }
 
     fn filename(&self) -> String {
@@ -270,8 +313,6 @@ impl AudioFile {
             let token = format!("${{{i}}}");
             let replace_token = &captures[i];
 
-            println!("token: {token}, replace: {:?}", replace_token);
-
             if let Some(artist) = metadata.artist {
                 metadata.artist = Some(artist.replace(&token, replace_token));
             }
@@ -280,7 +321,9 @@ impl AudioFile {
                 metadata.title = Some(title.replace(&token, replace_token));
             }
 
-            if let Some(track_number) = metadata.track_number {
+            if let Some(NumberOrToken::Token(track_number)) =
+                metadata.track_number
+            {
                 let track_number = track_number
                     .to_string()
                     .replace(&token, replace_token)
@@ -289,7 +332,8 @@ impl AudioFile {
                         "You can only put a number in tag 'track_number'",
                     )?;
 
-                metadata.track_number = Some(track_number);
+                metadata.track_number =
+                    Some(NumberOrToken::Number(track_number));
             }
 
             if let Some(album_title) = metadata.album_title {
@@ -297,14 +341,14 @@ impl AudioFile {
                     Some(album_title.replace(&token, replace_token));
             }
 
-            if let Some(year) = metadata.year {
+            if let Some(NumberOrToken::Token(year)) = metadata.year {
                 let year = year
                     .to_string()
                     .replace(&token, replace_token)
                     .parse()
                     .context("You can only put a number in tag 'year'")?;
 
-                metadata.year = Some(year);
+                metadata.year = Some(NumberOrToken::Number(year));
             }
         }
 
@@ -326,9 +370,9 @@ impl AudioFile {
         bail!("Failed to derive metadata from filename");
     }
 
-    fn metadata_from_internet(&self) -> anyhow::Result<Metadata> {
-        todo!();
-    }
+    // fn metadata_from_internet(&self) -> anyhow::Result<Metadata> {
+    //     todo!();
+    // }
 }
 
 fn is_supported_type(ext: &str) -> bool {
