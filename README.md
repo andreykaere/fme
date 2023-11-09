@@ -22,13 +22,11 @@ Options:
       --album-cover <ALBUM_COVER>    Set the image, located at the given path, as an album cover [aliases: ac]
   -y, --year <YEAR>                  Write specified value to the 'year' tag
       --track-number <TRACK_NUMBER>  Write specified value to the 'track number' tag [aliases: tn]
-  -m, --mode <MODE>                  Set the mode that will be used by the program to determine metadata 
   -p, --parse <PARSE>                Derive metadata information from the filename using specified patterns
+  -e, --regex <REGEX>                Try to apply regex to the filename and writes matched groups to special tokens
   -h, --help                         Print help (see more with '--help')
   -V, --version                      Print version
 ```
-
-<!-- Think about two different modes: regex and special parsing -->
 
 It is recommended to use [`rnr`](https://github.com/ismaelgv/rnr) utility to
 rename files beforehand if you need it (it might be useful if you download it,
@@ -57,6 +55,11 @@ default patterns see `fme --help` in the `--parse` option section.
 - Unknown to the parser pattern. This time we have to specify it manually:
 ```
 fme -p '{d}. {a} - {t} [{m}]' "12. Foo - Bar [Quuz].mp3"
+```
+
+- Regex
+```
+fme -e '(\d+)\. (\w+) - (\w+) \[(\w+)\]' --tn '${1}' -a '${2}' -t '${3}' --at '${4}' "12. Foo - Bar [Quuz].mp3"
 ```
 
 
