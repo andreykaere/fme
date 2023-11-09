@@ -1,13 +1,14 @@
-use anyhow::bail;
-use audiotags::{MimeType, Picture, Tag};
-use id3::Version;
-
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use anyhow::{bail, Context};
+use audiotags::{MimeType, Picture, Tag};
+use id3::Version;
+use regex::Regex;
+
 use crate::parse::ParsePattern;
-use crate::Mode;
+use crate::{FilenameMode, Mode};
 
 #[derive(clap::Args, Clone, Default, Debug)]
 pub struct Metadata {
@@ -183,7 +184,6 @@ impl AudioFile {
             };
 
             let picture = Picture::new(&cover, mimetype);
-
             tag.set_album_cover(picture);
         }
 
@@ -213,16 +213,30 @@ impl AudioFile {
         &self,
         metadata: &Metadata,
         mode: Mode,
-        parse_patterns: &[ParsePattern],
+        filename_mode: &FilenameMode,
     ) {
         let try_derive_metadata = match mode {
-            Mode::FromFileName => self.metadata_from_filename(parse_patterns),
+            Mode::FromFilename => match filename_mode {
+                FilenameMode::Parse(parse_patterns) => {
+                    self.parse_metadata_from_filename(parse_patterns)
+                }
+
+                FilenameMode::Regex(regex) => {
+                    self.regex_metadata_from_filename(regex, metadata)
+                }
+            },
 
             Mode::FromInternet => self.metadata_from_internet(),
         };
 
         if let Ok(mut derived_metadata) = try_derive_metadata {
-            derived_metadata.update(metadata);
+            match filename_mode {
+                // We don't want to write specified metadata in case of regex,
+                // because it has been already written with needed tokens applied
+                FilenameMode::Regex(_) => {}
+
+                _ => derived_metadata.update(metadata),
+            }
 
             if let Err(e) = self.write_metadata(&derived_metadata) {
                 eprintln!("{e}");
@@ -235,12 +249,73 @@ impl AudioFile {
         }
     }
 
-    fn metadata_from_filename(
+    fn filename(&self) -> String {
+        self.path.file_stem().unwrap().to_string_lossy().to_string()
+    }
+
+    fn regex_metadata_from_filename(
+        &self,
+        regex: &str,
+        metadata: &Metadata,
+    ) -> anyhow::Result<Metadata> {
+        let filename = self.filename();
+        let mut metadata = metadata.clone();
+
+        let re = Regex::new(regex)?;
+        let captures = re
+            .captures(&filename)
+            .context("Couldn't apply regex to this filename: {filename}")?;
+
+        for i in 1..captures.len() {
+            let token = format!("${{{i}}}");
+            let replace_token = &captures[i];
+
+            println!("token: {token}, replace: {:?}", replace_token);
+
+            if let Some(artist) = metadata.artist {
+                metadata.artist = Some(artist.replace(&token, replace_token));
+            }
+
+            if let Some(title) = metadata.title {
+                metadata.title = Some(title.replace(&token, replace_token));
+            }
+
+            if let Some(track_number) = metadata.track_number {
+                let track_number = track_number
+                    .to_string()
+                    .replace(&token, replace_token)
+                    .parse()
+                    .context(
+                        "You can only put a number in tag 'track_number'",
+                    )?;
+
+                metadata.track_number = Some(track_number);
+            }
+
+            if let Some(album_title) = metadata.album_title {
+                metadata.album_title =
+                    Some(album_title.replace(&token, replace_token));
+            }
+
+            if let Some(year) = metadata.year {
+                let year = year
+                    .to_string()
+                    .replace(&token, replace_token)
+                    .parse()
+                    .context("You can only put a number in tag 'year'")?;
+
+                metadata.year = Some(year);
+            }
+        }
+
+        Ok(metadata)
+    }
+
+    fn parse_metadata_from_filename(
         &self,
         parse_patterns: &[ParsePattern],
     ) -> anyhow::Result<Metadata> {
-        let filename =
-            self.path.file_stem().unwrap().to_string_lossy().to_string();
+        let filename = self.filename();
 
         for pattern in parse_patterns {
             if let Ok(metadata) = pattern.try_pattern(&filename) {

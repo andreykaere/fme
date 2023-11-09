@@ -29,14 +29,16 @@ pub struct Opts {
         long,
         short,
         value_enum,
-        default_value_t = Mode::FromFileName,
+        default_value_t = Mode::FromFilename,
         help = "Set the mode that will be used by the program to determine metadata",
     )]
     mode: Mode,
 
     /// When this option is specified, the program will try to match the given
     /// patterns (in the given order) with the filename and write extracted
-    /// information to the metadata.
+    /// information to the metadata. Here by filename we mean the final
+    /// component of the path taken up to extension (i.e. regular filename
+    /// with extension removed).
     ///
     /// You can use the following correspondence when writing your pattern:
     /// {n}    Artist <-> {a}
@@ -63,9 +65,25 @@ pub struct Opts {
     #[arg(
         long,
         short,
-        help = "Derive metadata information from the filename using specified patterns"
+        help = "Derive metadata information from the filename using specified patterns",
+        long_help
     )]
     parse: Option<Vec<ParsePattern>>,
+
+    /// When this option is specified, and provided regex pattern matches the
+    /// filename, it puts the captured group into tokens: i-th group is put in
+    /// token `${i}`. Numeration of the groups starts from 1. You can use then
+    /// these tokens in options like '--artist' or '--title'. Here by filename
+    /// we mean the final component of the path taken up to extension (i.e.
+    /// regular filename with extension removed).
+    #[arg(
+        long,
+        short = 'e',
+        conflicts_with("parse"),
+        help = "Try to apply regex to the filename and writes matched groups to special tokens",
+        long_help
+    )]
+    regex: Option<String>,
 
     files: Vec<PathBuf>,
 }
@@ -73,10 +91,16 @@ pub struct Opts {
 #[derive(clap::ValueEnum, Debug, Clone, Copy)]
 pub enum Mode {
     #[value(alias = "f", name = "filename")]
-    FromFileName,
+    FromFilename,
 
     #[value(alias = "i", name = "internet")]
     FromInternet,
+}
+
+#[derive(Debug, Clone)]
+pub enum FilenameMode {
+    Regex(String),
+    Parse(Vec<ParsePattern>),
 }
 
 fn get_all_files(
@@ -101,8 +125,14 @@ fn main() {
     let files_from_args = &args.files;
     let metadata = &args.metadata;
     let mode = args.mode;
+    let regex = &args.regex;
     let parse_patterns =
         &args.parse.unwrap_or(ParsePattern::default_patterns());
+
+    let filename_mode = match regex {
+        Some(exp) => FilenameMode::Regex(exp.to_string()),
+        None => FilenameMode::Parse(parse_patterns.to_vec()),
+    };
 
     let files_from_stdin = if atty::is(Stream::Stdin) {
         Vec::new()
@@ -117,7 +147,7 @@ fn main() {
 
     files
         .iter()
-        .for_each(|file| file.process_file(metadata, mode, parse_patterns));
+        .for_each(|file| file.process_file(metadata, mode, &filename_mode));
 }
 
 // #[cfg(test)]
