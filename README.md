@@ -10,11 +10,18 @@ next file.
 
 ## Install
 
-Using `cargo` you can install it with command
+You can install it by first downloading `cargo` (for installlation
+instructions see [here](https://github.com/rust-lang/cargo)). And then
+running 
 ```sh
-cargo install fme
+cargo install --git https://github.com/andreykaere/fme
 ```
-For cargo installation instructions, see [here](https://github.com/rust-lang/cargo).
+
+<!-- Using `cargo` you can install it with command -->
+<!-- ```sh -->
+<!-- cargo install fme -->
+<!-- ``` -->
+<!-- For cargo installation instructions, see [here](https://github.com/rust-lang/cargo). -->
 
 Alternatively, you can grab compiled binary suited for your system from the
 [release page](https://github.com/andreykaere/fme/releases).
