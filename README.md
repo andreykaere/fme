@@ -1,9 +1,24 @@
+# fme
+
+## About
 This is `fme` — flexible metadata editor. You can supply files both as
 arguments and as piping from other command like `find` or `ls`. 
 
 If `fme` fails to get metadata for given file or fails to write extracted
 metadata to it, `fme` will just print a error message and will continue to the
 next file.
+
+## Install
+
+Using `cargo` you can install it with command
+```sh
+cargo install fme
+```
+For cargo installation instructions, see [here](https://github.com/rust-lang/cargo).
+
+Alternatively, you can grab compiled binary suited for your system from the
+[release page](https://github.com/andreykaere/fme/releases).
+
 
 ## Usage
 
