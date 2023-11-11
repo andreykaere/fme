@@ -84,6 +84,7 @@ pub struct Opts {
     )]
     regex: Option<String>,
 
+    #[clap(required = true)]
     files: Vec<PathBuf>,
 }
 
