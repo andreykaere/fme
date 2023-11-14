@@ -79,6 +79,12 @@ default patterns see `fme --help` in the `--parse` option section.
 fme -p '{d}. {a} - {t} [{m}]' "12. Foo - Bar [Quuz].mp3"
 ```
 
+- Multiple patterns:
+```
+fme -p '{d}. {a} - {t} [{m}]' -p '{a} - {t}' "12. Foo - Bar [Quuz].mp3" "Baz -
+Foobar.mp3"
+```
+
 - Regex
 ```
 fme -e '(\d+)\. (\w+) - (\w+) \[(\w+)\]' --tn '${1}' -a '${2}' -t '${3}' --at '${4}' "12. Foo - Bar [Quuz].mp3"
