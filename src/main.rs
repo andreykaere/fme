@@ -84,7 +84,6 @@ pub struct Opts {
     )]
     regex: Option<String>,
 
-    #[clap(required = true)]
     files: Vec<PathBuf>,
 }
 
@@ -144,6 +143,11 @@ fn main() {
     };
 
     let files = get_all_files(files_from_args, &files_from_stdin);
+
+    if files.is_empty() {
+        eprintln!("No files were provided");
+        std::process::exit(2);
+    }
 
     for file in files {
         if let Err(e) = file.process_file(metadata, mode, &filename_mode) {
