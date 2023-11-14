@@ -97,9 +97,9 @@ pub enum Mode {
 }
 
 #[derive(Debug, Clone)]
-pub enum FilenameMode {
+pub enum FilenameParseMode {
     Regex(String),
-    Parse(Vec<ParsePattern>),
+    Parser(Vec<ParsePattern>),
 }
 
 fn get_all_files(
@@ -128,9 +128,9 @@ fn main() {
     let parse_patterns =
         &args.parse.unwrap_or(ParsePattern::default_patterns());
 
-    let filename_mode = match regex {
-        Some(exp) => FilenameMode::Regex(exp.to_string()),
-        None => FilenameMode::Parse(parse_patterns.to_vec()),
+    let filename_parse_mode = match regex {
+        Some(exp) => FilenameParseMode::Regex(exp.to_string()),
+        None => FilenameParseMode::Parser(parse_patterns.to_vec()),
     };
 
     let files_from_stdin = if atty::is(Stream::Stdin) {
@@ -150,7 +150,7 @@ fn main() {
     }
 
     for file in files {
-        if let Err(e) = file.process_file(metadata, mode, &filename_mode) {
+        if let Err(e) = file.process_file(metadata, mode, &filename_parse_mode) {
             eprintln!("{e}");
         }
     }

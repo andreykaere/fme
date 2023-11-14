@@ -8,7 +8,7 @@ use id3::Version;
 use regex::Regex;
 
 use crate::parse::ParsePattern;
-use crate::{FilenameMode, Mode};
+use crate::{FilenameParseMode, Mode};
 
 #[derive(clap::Args, Clone, Default, Debug)]
 pub struct Metadata {
@@ -245,13 +245,13 @@ impl AudioFile {
         &self,
         metadata: &Metadata,
         mode: Mode,
-        filename_mode: &FilenameMode,
+        filename_parse_mode: &FilenameParseMode,
     ) -> anyhow::Result<()> {
         let try_derive_metadata;
 
         match mode {
-            Mode::FromFilename => match filename_mode {
-                FilenameMode::Parse(parse_patterns) => {
+            Mode::FromFilename => match filename_parse_mode {
+                FilenameParseMode::Parser(parse_patterns) => {
                     match self.parse_metadata_from_filename(parse_patterns) {
                         Ok(x) => try_derive_metadata = Some(x),
                         Err(e) => bail!(
@@ -262,7 +262,7 @@ impl AudioFile {
                     };
                 }
 
-                FilenameMode::Regex(regex) => {
+                FilenameParseMode::Regex(regex) => {
                     match self.regex_metadata_from_filename(regex, metadata) {
                         Ok(x) => try_derive_metadata = Some(x),
                         Err(e) => bail!(
@@ -278,10 +278,10 @@ impl AudioFile {
         };
 
         if let Some(mut derived_metadata) = try_derive_metadata {
-            match filename_mode {
+            match filename_parse_mode {
                 // We don't want to write specified metadata in case of regex,
                 // because it has been already written with needed tokens applied
-                FilenameMode::Regex(_) => {}
+                FilenameParseMode::Regex(_) => {}
 
                 _ => derived_metadata.update(metadata),
             }
