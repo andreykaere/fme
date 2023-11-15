@@ -75,7 +75,7 @@ impl std::str::FromStr for NumberOrToken {
     type Err = anyhow::Error;
 
     fn from_str(string: &str) -> Result<Self, Self::Err> {
-        if string.chars().all(|e| e.is_numeric()) {
+        if string.chars().all(char::is_numeric) {
             Ok(Self::Number(string.parse()?))
         } else {
             Ok(Self::Token(string.to_string()))
@@ -92,7 +92,7 @@ impl AudioFile {
     pub fn new(file: impl AsRef<Path>) -> anyhow::Result<Self> {
         let ext = match file.as_ref().extension() {
             Some(x) => x.to_string_lossy().to_string().to_lowercase(),
-            None => "".to_string(),
+            None => String::new(),
         };
 
         let path = file.as_ref().to_owned();
@@ -116,6 +116,14 @@ impl AudioFile {
         Ok(Self { path })
     }
 
+    fn path(&self) -> String {
+        self.path.to_string_lossy().to_string()
+    }
+
+    fn filename_stem(&self) -> String {
+        self.path.file_stem().unwrap().to_string_lossy().to_string()
+    }
+
     fn init_metadata(&self) -> anyhow::Result<()> {
         match self
             .path
@@ -128,30 +136,22 @@ impl AudioFile {
         {
             "mp3" => {
                 let new_tag = id3::Tag::new();
-                new_tag.write_to_path(
-                    self.path.to_string_lossy().to_string(),
-                    Version::Id3v24,
-                )?
+                new_tag.write_to_path(self.path(), Version::Id3v24)?;
             }
 
             "wav" => {
                 let new_tag = id3::Tag::new();
-                new_tag.write_to_wav_path(
-                    self.path.to_string_lossy().to_string(),
-                    Version::Id3v24,
-                )?
+                new_tag.write_to_wav_path(self.path(), Version::Id3v24)?;
             }
 
             "m4a" | "m4b" | "m4p" | "m4v" | "isom" | "mp4" => {
                 let new_tag = mp4ameta::Tag::default();
-                new_tag
-                    .write_to_path(self.path.to_string_lossy().to_string())?
+                new_tag.write_to_path(self.path())?;
             }
 
             "flac" => {
                 let mut new_tag = metaflac::Tag::new();
-                new_tag
-                    .write_to_path(self.path.to_string_lossy().to_string())?
+                new_tag.write_to_path(self.path())?;
             }
 
             _ => unimplemented!("Other file formats are not supported"),
@@ -162,24 +162,18 @@ impl AudioFile {
 
     pub fn write_metadata(&self, metadata: &Metadata) -> anyhow::Result<()> {
         let tag = Tag::new();
-        let mut tag = match tag.read_from_path(&self.path) {
-            Ok(t) => t,
-            Err(_) => {
-                if self.init_metadata().is_err() {
-                    bail!(
-                        "Failed to init metadata tags in the file '{}'",
-                        self.path.file_name().unwrap().to_string_lossy()
-                    );
-                }
+        let filename = self.path.file_name().unwrap().to_string_lossy();
 
-                match tag.read_from_path(&self.path) {
-                    Ok(t) => t,
-                    Err(_) => bail!(
-                        "Failed to read metadata tags from the file '{}'",
-                        self.path.file_name().unwrap().to_string_lossy()
-                    ),
-                }
-            }
+        let mut tag = if let Ok(tag_import) = tag.read_from_path(&self.path) {
+            tag_import
+        } else {
+            self.init_metadata().context(format!(
+                "Failed to init metadata tags in the file '{filename}'",
+            ))?;
+
+            tag.read_from_path(&self.path).context(format!(
+                "Failed to read metadata tags from the file '{filename}'",
+            ))?
         };
 
         if let Some(artist) = &metadata.artist {
@@ -193,6 +187,7 @@ impl AudioFile {
         if let Some(album_cover) = &metadata.album_cover {
             let cover = fs::read(album_cover).unwrap();
             let ext = album_cover.extension().and_then(OsStr::to_str).unwrap();
+
             let mimetype = match ext {
                 "png" | "PNG" => MimeType::Png,
                 "jpg" | "jpeg" | "JPG" => MimeType::Jpeg,
@@ -231,12 +226,10 @@ impl AudioFile {
             }
         }
 
-        if tag.write_to_path(&self.path.to_string_lossy()).is_err() {
-            bail!(
-                "Failed to write metadata tags in the file '{}'",
-                self.path.file_name().unwrap().to_string_lossy()
-            );
-        }
+
+        tag.write_to_path(&self.path()).context(format!(
+            "Failed to write metadata tags in the file '{filename}'",
+        ))?;
 
         Ok(())
     }
@@ -257,7 +250,7 @@ impl AudioFile {
                         Err(e) => bail!(
                             "Couldn't apply given patterns to the filename '{}', \
                             the following error occurred: {e}",
-                            self.path.file_stem().unwrap().to_string_lossy()
+                            self.filename_stem()
                         ),
                     };
                 }
@@ -268,7 +261,7 @@ impl AudioFile {
                         Err(e) => bail!(
                             "Couldn't apply given regex to the filename '{}', \
                             the following error occurred: {e}",
-                            self.path.file_stem().unwrap().to_string_lossy()
+                            self.filename_stem()
                         ),
                     };
                 }
@@ -292,22 +285,18 @@ impl AudioFile {
         Ok(())
     }
 
-    fn filename(&self) -> String {
-        self.path.file_stem().unwrap().to_string_lossy().to_string()
-    }
-
     fn regex_metadata_from_filename(
         &self,
         regex: &str,
         metadata: &Metadata,
     ) -> anyhow::Result<Metadata> {
-        let filename = self.filename();
+        let filename_stem = self.filename_stem();
         let mut metadata = metadata.clone();
 
         let re = Regex::new(regex)?;
-        let captures = re
-            .captures(&filename)
-            .context("Couldn't apply regex to this filename: {filename}")?;
+        let captures = re.captures(&filename_stem).context(
+            "Couldn't apply regex to this filename: {filename_stem}",
+        )?;
 
         for i in 1..captures.len() {
             let token = format!("${{{i}}}");
@@ -359,15 +348,15 @@ impl AudioFile {
         &self,
         parse_patterns: &[ParsePattern],
     ) -> anyhow::Result<Metadata> {
-        let filename = self.filename();
+        let filename_stem = self.filename_stem();
 
         for pattern in parse_patterns {
-            if let Ok(metadata) = pattern.try_pattern(&filename) {
+            if let Ok(metadata) = pattern.try_pattern(&filename_stem) {
                 return Ok(metadata);
             }
         }
 
-        bail!("Failed to derive metadata from filename");
+        bail!("Failed to derive metadata from this filename: {filename_stem}");
     }
 
     // fn metadata_from_internet(&self) -> anyhow::Result<Metadata> {

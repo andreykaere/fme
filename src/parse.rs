@@ -1,4 +1,4 @@
-use anyhow::bail;
+use anyhow::{bail, Context};
 use regex::Regex;
 use std::str::FromStr;
 
@@ -49,21 +49,15 @@ impl ParsePattern {
                 ItemPattern::Text(s) => regex::escape(s),
                 ItemPattern::Token(t) => t.token_to_regex_repr(),
             })
-            .collect::<Vec<_>>()
-            .join("");
+            .collect::<String>();
+
         regex_str.push('$');
         regex_str.insert(0, '^');
 
-        // println!("{regex_str}");
-
         let regex = Regex::new(&regex_str).unwrap();
-
-        let caps = match regex.captures(input) {
-            Some(x) => x,
-            None => bail!("Failed to parse given string using this pattern"),
-        };
-
-        // println!("caps: {:?}", caps);
+        let groups = regex
+            .captures(input)
+            .context("Failed to parse given string using this pattern")?;
 
         let tokens: Vec<_> = self
             .items
@@ -78,18 +72,12 @@ impl ParsePattern {
             .collect();
 
         for (i, token) in tokens.iter().enumerate() {
-            let value = caps.get(i + 1).unwrap().as_str();
+            let value = groups.get(i + 1).unwrap().as_str();
             token.apply_token(value, &mut metadata)?;
         }
 
         Ok(metadata)
     }
-}
-
-fn keep_split<'a>(input: &'a str, token: &'a str) -> Vec<&'a str> {
-    itertools::intersperse(input.split(token), token)
-        .filter(|x| !x.is_empty())
-        .collect()
 }
 
 impl FromStr for ParsePattern {
@@ -118,6 +106,13 @@ impl FromStr for ParsePattern {
     }
 }
 
+fn keep_split<'a>(input: &'a str, token: &'a str) -> Vec<&'a str> {
+    itertools::intersperse(input.split(token), token)
+        .filter(|x| !x.is_empty())
+        .collect()
+}
+
+
 #[derive(Debug, Clone, PartialEq)]
 enum ItemPattern {
     Text(String),
@@ -135,6 +130,7 @@ impl FromStr for ItemPattern {
     }
 }
 
+
 #[derive(Debug, Clone, PartialEq)]
 enum Token {
     Artist,
@@ -151,11 +147,8 @@ impl Token {
         let regex_num = r"([0-9]+)";
 
         let regex_repr = match self {
-            Token::Artist => regex_text,
-            Token::Title => regex_text,
-            Token::Album => regex_text,
-            Token::Year => regex_num,
-            Token::Track => regex_num,
+            Token::Artist | Token::Title | Token::Album => regex_text,
+            Token::Year | Token::Track => regex_num,
         };
 
         regex_repr.to_string()

@@ -129,8 +129,8 @@ fn main() {
         &args.parse.unwrap_or(ParsePattern::default_patterns());
 
     let filename_parse_mode = match regex {
-        Some(exp) => FilenameParseMode::Regex(exp.to_string()),
-        None => FilenameParseMode::Parser(parse_patterns.to_vec()),
+        Some(exp) => FilenameParseMode::Regex(exp.clone()),
+        None => FilenameParseMode::Parser(parse_patterns.clone()),
     };
 
     let files_from_stdin = if atty::is(Stream::Stdin) {
@@ -150,7 +150,8 @@ fn main() {
     }
 
     for file in files {
-        if let Err(e) = file.process_file(metadata, mode, &filename_parse_mode) {
+        if let Err(e) = file.process_file(metadata, mode, &filename_parse_mode)
+        {
             eprintln!("{e}");
         }
     }
