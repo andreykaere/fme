@@ -75,6 +75,9 @@ pub struct Opts {
     /// these tokens in options like '--artist' or '--title'. Here by filename
     /// we mean the final component of the path taken up to extension (i.e.
     /// regular filename with extension removed).
+    ///
+    /// Note: in contrast to `--parse` option, with `--regex` you should
+    /// escape charaters as in any regular expression.
     #[arg(
         long,
         short = 'e',

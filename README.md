@@ -72,7 +72,13 @@ fme "Foo - Bar.mp3"
 In this case, the result will be as in previous example. Here we didn't use
 `--parse` option, because this pattern is one of the default ones and
 therefore does not need to be specified manually. For the complete list of
-default patterns see `fme --help` in the `--parse` option section.
+default patterns see `fme --help` in the `--parse` option section. 
+
+**Note**: Sometimes the order of the default parsers won't give you the
+desired result. For example if you want to parse `50 Cent - In Da Club.mp3`,
+than you would have to run `fme -p '{a} - {t}' "50 Cent - In Da Club.mp3`
+manually. Because default patterns would parse `50` as the number of the song
+in the album.
 
 - Unknown to the parser pattern. This time we have to specify it manually:
 ```
